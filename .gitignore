@@ -1,0 +1,31 @@
+# Ignore sensitive files
+config/google_oauth.php
+config/database.php
+
+# Ignore backups
+backups/
+*.sql
+*.sql.gz
+
+# Ignore logs
+logs/
+*.log
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Ignore vendor (if using composer)
+vendor/
+
+# Ignore node_modules (if using npm)
+node_modules/
+
