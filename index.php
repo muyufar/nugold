@@ -95,6 +95,11 @@ switch ($action) {
         include __DIR__ . '/views/profil.php';
         break;
 
+    case 'simulasi_gadai':
+        requireLogin();
+        include __DIR__ . '/views/simulasi_gadai.php';
+        break;
+
     case 'api_scrape_harga':
         // API endpoint untuk update harga (bisa dipanggil via cron)
         $scraper = new ScraperController();

@@ -739,6 +739,7 @@ $isDarkMode = isset($_COOKIE['dark_mode']) && $_COOKIE['dark_mode'] === '1';
         <ul class="sidebar-menu">
             <li><a href="<?php echo BASE_URL; ?>index.php?action=dashboard" class="<?php echo $action === 'dashboard' ? 'active' : ''; ?>"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
             <li><a href="<?php echo BASE_URL; ?>index.php?action=tambah_emas" class="<?php echo $action === 'tambah_emas' ? 'active' : ''; ?>"><i class="bi bi-plus-circle"></i> Tambah Emas</a></li>
+            <li><a href="<?php echo BASE_URL; ?>index.php?action=simulasi_gadai" class="<?php echo $action === 'simulasi_gadai' ? 'active' : ''; ?>"><i class="bi bi-calculator"></i> Simulasi Gadai</a></li>
             <li><a href="<?php echo BASE_URL; ?>index.php?action=riwayat_harga" class="<?php echo $action === 'riwayat_harga' ? 'active' : ''; ?>"><i class="bi bi-graph-up"></i> Riwayat Harga</a></li>
             <li><a href="<?php echo BASE_URL; ?>index.php?action=pengaturan_alert" class="<?php echo $action === 'pengaturan_alert' ? 'active' : ''; ?>"><i class="bi bi-bell"></i> Pengaturan Alert</a></li>
             <li><a href="<?php echo BASE_URL; ?>index.php?action=profil" class="<?php echo $action === 'profil' ? 'active' : ''; ?>"><i class="bi bi-person"></i> Profil</a></li>
@@ -783,13 +784,13 @@ $isDarkMode = isset($_COOKIE['dark_mode']) && $_COOKIE['dark_mode'] === '1';
             <i class="bi bi-plus-circle"></i>
             <span>Tambah</span>
         </a>
+        <a href="<?php echo BASE_URL; ?>index.php?action=simulasi_gadai" class="bottom-nav-item <?php echo $action === 'simulasi_gadai' ? 'active' : ''; ?>">
+            <i class="bi bi-calculator"></i>
+            <span>Gadai</span>
+        </a>
         <a href="<?php echo BASE_URL; ?>index.php?action=riwayat_harga" class="bottom-nav-item <?php echo $action === 'riwayat_harga' ? 'active' : ''; ?>">
             <i class="bi bi-graph-up"></i>
             <span>Riwayat</span>
-        </a>
-        <a href="<?php echo BASE_URL; ?>index.php?action=pengaturan_alert" class="bottom-nav-item <?php echo $action === 'pengaturan_alert' ? 'active' : ''; ?>">
-            <i class="bi bi-bell"></i>
-            <span>Alert</span>
         </a>
         <a href="<?php echo BASE_URL; ?>index.php?action=profil" class="bottom-nav-item <?php echo $action === 'profil' ? 'active' : ''; ?>">
             <i class="bi bi-person"></i>
