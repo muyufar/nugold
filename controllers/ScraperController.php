@@ -18,6 +18,22 @@ class ScraperController
     }
 
     /**
+     * Log error untuk debugging
+     */
+    private function logError($message)
+    {
+        $logFile = __DIR__ . '/../logs/scraper.log';
+        $logDir = dirname($logFile);
+
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+
+        $logMessage = date('Y-m-d H:i:s') . ' - ' . $message . "\n";
+        file_put_contents($logFile, $logMessage, FILE_APPEND);
+    }
+
+    /**
      * Scrape harga emas dari website
      * Mengambil data real-time dari https://harga-emas.org/history-harga
      */
@@ -39,9 +55,16 @@ class ScraperController
 
         $html = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
 
+        // Log error jika ada
+        if ($curlError) {
+            $this->logError("CURL Error: " . $curlError);
+        }
+
         if ($httpCode !== 200 || empty($html)) {
+            $this->logError("HTTP Code: $httpCode, HTML empty: " . (empty($html) ? 'yes' : 'no'));
             return false;
         }
 
@@ -56,9 +79,16 @@ class ScraperController
             $harga10k = $harga24k * 0.4167; // 10/24 = 0.4167
 
             $tanggal = date('Y-m-d');
-            return $this->hargaEmasModel->saveOrUpdate($tanggal, $harga24k, $harga22k, $harga18k, $harga10k);
+            $result = $this->hargaEmasModel->saveOrUpdate($tanggal, $harga24k, $harga22k, $harga18k, $harga10k);
+
+            if (!$result) {
+                $this->logError("Failed to save harga to database");
+            }
+
+            return $result;
         }
 
+        $this->logError("Failed to extract harga from HTML (harga24k = $harga24k)");
         return false;
     }
 
@@ -74,31 +104,47 @@ class ScraperController
      */
     private function extractHargaSpot($html)
     {
-        // Method 1: Cari class "HistoryAntamTable_table__O0Tvl", lalu tbody, lalu <tr> ke-10, <td> ke-3
-        $pattern1 = '/class="[^"]*HistoryAntamTable_table__O0Tvl[^"]*".*?<tbody[^>]*>(.*?)<\/tbody>/is';
-        if (preg_match($pattern1, $html, $tableMatch)) {
+        // Method 1: Cari baris dengan satuan "1" gram, lalu ambil harga dari kolom Pegadaian (kolom ke-3)
+        // Pattern: cari <tr> yang berisi <p>1</p> di kolom pertama, lalu ambil harga dari kolom ketiga
+        $pattern1 = '/<tr[^>]*>.*?<td[^>]*>.*?<p>1<\/p>.*?<\/td>.*?<td[^>]*>.*?<p>([\d.,]+)<\/p>.*?<\/td>.*?<td[^>]*>.*?<p>([\d.,]+)<\/p>.*?<\/td>.*?<\/tr>/is';
+        if (preg_match($pattern1, $html, $matches)) {
+            // $matches[1] = harga Antam, $matches[2] = harga Pegadaian
+            // Ambil harga Pegadaian (kolom ke-3)
+            if (isset($matches[2])) {
+                $hargaStr = trim($matches[2]);
+                $harga = str_replace(['.', ','], '', $hargaStr);
+                $hargaFloat = floatval($harga);
+
+                // Validasi harga 2.3-2.6 juta (harga 24K yang benar)
+                if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
+                    return $hargaFloat;
+                }
+            }
+        }
+
+        // Method 1b: Pattern alternatif dengan class HistoryAntamTable
+        $pattern1b = '/class="[^"]*HistoryAntamTable_table__O0Tvl[^"]*".*?<tbody[^>]*>(.*?)<\/tbody>/is';
+        if (preg_match($pattern1b, $html, $tableMatch)) {
             $tbody = $tableMatch[1];
 
-            // Cari semua <tr> dalam tbody
+            // Cari baris yang berisi satuan "1"
             if (preg_match_all('/<tr[^>]*>(.*?)<\/tr>/is', $tbody, $rowMatches)) {
-                // Ambil baris ke-10 (index 9, karena array dimulai dari 0)
-                // Baris 0 = header, baris 1-11 = data (baris 10 = satuan "1")
-                if (isset($rowMatches[1][10])) {
-                    $row10 = $rowMatches[1][10];
+                foreach ($rowMatches[1] as $row) {
+                    // Cek apakah baris ini berisi satuan "1"
+                    if (preg_match('/<p>1<\/p>/i', $row)) {
+                        // Ambil semua <td> dalam baris ini
+                        if (preg_match_all('/<td[^>]*>(.*?)<\/td>/is', $row, $cellMatches)) {
+                            // Kolom ke-3 (index 2) adalah harga Pegadaian
+                            if (isset($cellMatches[1][2])) {
+                                $hargaStr = trim($cellMatches[1][2]);
+                                $hargaStr = strip_tags($hargaStr);
+                                $harga = str_replace(['.', ','], '', $hargaStr);
+                                $hargaFloat = floatval($harga);
 
-                    // Cari semua <td> dalam baris ke-10
-                    if (preg_match_all('/<td[^>]*>(.*?)<\/td>/is', $row10, $cellMatches)) {
-                        // Ambil kolom ke-3 (index 2, karena array dimulai dari 0)
-                        if (isset($cellMatches[1][2])) {
-                            $hargaStr = trim($cellMatches[1][2]);
-                            // Hapus tag HTML jika ada
-                            $hargaStr = strip_tags($hargaStr);
-                            // Hapus titik dan koma, lalu convert ke float
-                            $harga = str_replace(['.', ','], '', $hargaStr);
-                            $hargaFloat = floatval($harga);
-
-                            if ($hargaFloat >= 2400000 && $hargaFloat <= 2500000) {
-                                return $hargaFloat;
+                                // Validasi harga 2.3-2.6 juta
+                                if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
+                                    return $hargaFloat;
+                                }
                             }
                         }
                     }
@@ -127,17 +173,59 @@ class ScraperController
                         $harga = str_replace(['.', ','], '', $hargaStr);
                         $hargaFloat = floatval($harga);
 
-                        if ($hargaFloat >= 2400000 && $hargaFloat <= 2500000) {
+                        // Prioritas untuk harga 2.3-2.6 juta (harga 24K yang benar)
+                        if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
                             return $hargaFloat;
+                        }
+                        // Fallback untuk range lebih luas
+                        if ($hargaFloat >= 1000000 && $hargaFloat <= 5000000) {
+                            // Simpan sebagai kandidat, tapi cari yang lebih tepat dulu
+                            $this->logError("Found harga in wide range: $hargaFloat, but looking for 2.3-2.6M range");
                         }
                     }
                 }
             }
         }
 
-        // Method 3: Fallback - cari langsung angka 2.422.000
-        if (preg_match('/2\.422\.000/', $html)) {
-            return 2422000;
+        // Method 3: Cari harga IDR/gr dari tabel riwayat (lebih reliable)
+        $dataHistory = $this->extractRiwayatHarga($html);
+        if (!empty($dataHistory) && isset($dataHistory[0]['harga'])) {
+            $harga = $dataHistory[0]['harga'];
+            // Prioritas untuk harga 2.3-2.6 juta
+            if ($harga >= 2300000 && $harga <= 2600000) {
+                return $harga;
+            }
+            // Fallback untuk range lebih luas
+            if ($harga >= 1000000 && $harga <= 5000000) {
+                return $harga;
+            }
+        }
+
+        // Method 4: Cari harga yang lebih spesifik (sekitar 2.4 juta - harga 24K yang benar)
+        // Prioritas untuk harga antara 2.3 juta - 2.6 juta (range harga 24K yang wajar)
+        $pattern4 = '/Rp\s*([\d.,]+)/i';
+        if (preg_match_all($pattern4, $html, $matches)) {
+            $candidates = [];
+            foreach ($matches[1] as $hargaStr) {
+                $harga = str_replace(['.', ','], '', $hargaStr);
+                $hargaFloat = floatval($harga);
+                // Prioritas untuk harga 2.3-2.6 juta (harga 24K yang benar)
+                if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
+                    $candidates[] = $hargaFloat;
+                }
+            }
+            // Jika ada kandidat di range 2.3-2.6 juta, ambil yang pertama
+            if (!empty($candidates)) {
+                return $candidates[0];
+            }
+            // Jika tidak ada, cari di range lebih luas (1-5 juta)
+            foreach ($matches[1] as $hargaStr) {
+                $harga = str_replace(['.', ','], '', $hargaStr);
+                $hargaFloat = floatval($harga);
+                if ($hargaFloat >= 1000000 && $hargaFloat <= 5000000) {
+                    return $hargaFloat;
+                }
+            }
         }
 
         return 0;
@@ -158,12 +246,22 @@ class ScraperController
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7'
+        ));
 
         $html = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
 
+        if ($curlError) {
+            $this->logError("scrapeRiwayatHarga - CURL Error: " . $curlError);
+        }
+
         if ($httpCode !== 200 || empty($html)) {
+            $this->logError("scrapeRiwayatHarga - HTTP Code: $httpCode, HTML empty: " . (empty($html) ? 'yes' : 'no'));
             return false;
         }
 
@@ -171,6 +269,7 @@ class ScraperController
         $dataHistory = $this->extractRiwayatHarga($html);
 
         if (empty($dataHistory)) {
+            $this->logError("scrapeRiwayatHarga - No data extracted from HTML");
             return false;
         }
 
@@ -183,7 +282,13 @@ class ScraperController
         $harga10k = $harga24k * 0.4167;
 
         $tanggal = date('Y-m-d');
-        return $this->hargaEmasModel->saveOrUpdate($tanggal, $harga24k, $harga22k, $harga18k, $harga10k);
+        $result = $this->hargaEmasModel->saveOrUpdate($tanggal, $harga24k, $harga22k, $harga18k, $harga10k);
+
+        if (!$result) {
+            $this->logError("scrapeRiwayatHarga - Failed to save to database");
+        }
+
+        return $result;
     }
 
     /**
@@ -217,7 +322,7 @@ class ScraperController
 
         // Jika tidak ada data, coba pattern alternatif
         if (empty($data)) {
-            // Pattern alternatif: cari semua harga IDR/gr setelah waktu
+            // Pattern alternatif 1: cari semua harga IDR/gr setelah waktu
             $pattern2 = '/<td[^>]*>(\d{2}:\d{2})<\/td>(?:.*?<td[^>]*>.*?<\/td>){3}.*?<td[^>]*>Rp\s*([\d.,]+)<\/td>/is';
             if (preg_match_all($pattern2, $html, $matches, PREG_SET_ORDER)) {
                 foreach ($matches as $match) {
@@ -230,6 +335,25 @@ class ScraperController
                             'waktu' => $waktu,
                             'harga' => $hargaFloat
                         );
+                    }
+                }
+            }
+        }
+
+        // Pattern alternatif 2: Cari semua harga dengan format Rp X.XXX.XXX atau Rp X,XXX,XXX
+        if (empty($data)) {
+            $pattern3 = '/Rp\s*([\d.,]+)\s*\/?\s*gr/i';
+            if (preg_match_all($pattern3, $html, $matches)) {
+                foreach ($matches[1] as $hargaStr) {
+                    $harga = str_replace(['.', ','], '', $hargaStr);
+                    $hargaFloat = floatval($harga);
+                    if ($hargaFloat > 1000000 && $hargaFloat < 5000000) {
+                        // Ambil harga pertama yang valid
+                        $data[] = array(
+                            'waktu' => date('H:i'),
+                            'harga' => $hargaFloat
+                        );
+                        break; // Ambil yang pertama saja
                     }
                 }
             }
@@ -268,11 +392,38 @@ class ScraperController
         // Cek apakah sudah ada data hari ini
         $hargaHariIni = $this->hargaEmasModel->getHargaHariIni();
 
-        // Jika belum ada atau sudah lebih dari 1 jam, update
-        if (!$hargaHariIni || strtotime($hargaHariIni['updated_at']) < (time() - 3600)) {
-            return $this->scrapeHargaEmas();
+        // Tentukan apakah perlu update
+        $needUpdate = false;
+
+        if (!$hargaHariIni) {
+            // Belum ada data hari ini, perlu update
+            $needUpdate = true;
+        } else {
+            // Cek apakah sudah lebih dari 1 jam sejak update terakhir
+            $lastUpdate = isset($hargaHariIni['updated_at']) ? strtotime($hargaHariIni['updated_at']) : strtotime($hargaHariIni['created_at']);
+            if ($lastUpdate < (time() - 3600)) {
+                $needUpdate = true;
+            }
         }
 
+        if ($needUpdate) {
+            // Coba method 1: scrapeHargaEmas
+            $result = $this->scrapeHargaEmas();
+
+            // Jika gagal, coba method 2: scrapeRiwayatHarga
+            if (!$result) {
+                $this->logError("scrapeHargaEmas failed, trying scrapeRiwayatHarga");
+                $result = $this->scrapeRiwayatHarga(1);
+            }
+
+            if (!$result) {
+                $this->logError("All scraping methods failed");
+            }
+
+            return $result;
+        }
+
+        // Data sudah ada dan masih fresh (kurang dari 1 jam)
         return true;
     }
 }

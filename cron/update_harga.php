@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Cron Job untuk Update Harga Emas
  * Jalankan script ini setiap 1 jam sekali
@@ -14,19 +15,38 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../controllers/ScraperController.php';
 
 // Update harga emas
-$scraper = new ScraperController();
-$result = $scraper->updateHargaEmas();
+try {
+    $scraper = new ScraperController();
+    $result = $scraper->updateHargaEmas();
 
-// Log hasil
-$logFile = __DIR__ . '/../logs/cron.log';
-$logDir = dirname($logFile);
+    // Log hasil
+    $logFile = __DIR__ . '/../logs/cron.log';
+    $logDir = dirname($logFile);
 
-if (!is_dir($logDir)) {
-    mkdir($logDir, 0755, true);
+    if (!is_dir($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+
+    $status = $result ? 'SUCCESS' : 'FAILED';
+    $message = date('Y-m-d H:i:s') . ' - Update harga emas: ' . $status . "\n";
+
+    if (!$result) {
+        $message .= "  Error: Check scraper.log for details\n";
+    }
+
+    file_put_contents($logFile, $message, FILE_APPEND);
+
+    echo $message;
+} catch (Exception $e) {
+    $logFile = __DIR__ . '/../logs/cron.log';
+    $logDir = dirname($logFile);
+
+    if (!is_dir($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+
+    $errorMessage = date('Y-m-d H:i:s') . ' - Update harga emas: FAILED - Exception: ' . $e->getMessage() . "\n";
+    file_put_contents($logFile, $errorMessage, FILE_APPEND);
+
+    echo $errorMessage;
 }
-
-$message = date('Y-m-d H:i:s') . ' - Update harga emas: ' . ($result ? 'SUCCESS' : 'FAILED') . "\n";
-file_put_contents($logFile, $message, FILE_APPEND);
-
-echo $message;
-
