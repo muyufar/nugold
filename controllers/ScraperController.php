@@ -116,7 +116,7 @@ class ScraperController
                 $hargaFloat = floatval($harga);
 
                 // Validasi harga 2.3-2.6 juta (harga 24K yang benar)
-                if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
+                if ($hargaFloat >= 2300000 && $hargaFloat <= 2900000) {
                     return $hargaFloat;
                 }
             }
@@ -142,7 +142,7 @@ class ScraperController
                                 $hargaFloat = floatval($harga);
 
                                 // Validasi harga 2.3-2.6 juta
-                                if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
+                                if ($hargaFloat >= 2300000 && $hargaFloat <= 2900000) {
                                     return $hargaFloat;
                                 }
                             }
@@ -174,7 +174,7 @@ class ScraperController
                         $hargaFloat = floatval($harga);
 
                         // Prioritas untuk harga 2.3-2.6 juta (harga 24K yang benar)
-                        if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
+                        if ($hargaFloat >= 2300000 && $hargaFloat <= 2900000) {
                             return $hargaFloat;
                         }
                         // Fallback untuk range lebih luas
@@ -192,7 +192,7 @@ class ScraperController
         if (!empty($dataHistory) && isset($dataHistory[0]['harga'])) {
             $harga = $dataHistory[0]['harga'];
             // Prioritas untuk harga 2.3-2.6 juta
-            if ($harga >= 2300000 && $harga <= 2600000) {
+            if ($harga >= 2300000 && $harga <= 2900000) {
                 return $harga;
             }
             // Fallback untuk range lebih luas
@@ -210,7 +210,7 @@ class ScraperController
                 $harga = str_replace(['.', ','], '', $hargaStr);
                 $hargaFloat = floatval($harga);
                 // Prioritas untuk harga 2.3-2.6 juta (harga 24K yang benar)
-                if ($hargaFloat >= 2300000 && $hargaFloat <= 2600000) {
+                if ($hargaFloat >= 2300000 && $hargaFloat <= 2900000) {
                     $candidates[] = $hargaFloat;
                 }
             }
